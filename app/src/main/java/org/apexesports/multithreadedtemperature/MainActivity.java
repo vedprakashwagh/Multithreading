@@ -15,13 +15,10 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainActivity extends AppCompatActivity {
     private final int DELAY = 100;
 
-
     private final AtomicReference<String> currentTemperature = new AtomicReference<>("--°C");
-    private final AtomicBoolean updateReady = new AtomicBoolean(false);
 
     //Thanks to this -> https://www.geeksforgeeks.org/java-util-concurrent-cyclicbarrier-java/
     private CyclicBarrier updateBarrier;
-    private final Object updateLock = new Object();
     private ScheduledExecutorService thermometerExecutor;
     private ScheduledExecutorService[] displayExecutors = new ScheduledExecutorService[7];
 
@@ -47,12 +44,7 @@ public class MainActivity extends AppCompatActivity {
                     TextView mainDisplay = findViewById(R.id.mainTemperatureDisplay);
                     mainDisplay.setText("Outside Temperature: " + newTemperature);
                 });
-                synchronized (updateLock) {
-                    updateReady.set(true);
-                    updateLock.notifyAll();
-                }
                 updateBarrier.await();
-                updateBarrier.reset();
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -65,19 +57,11 @@ public class MainActivity extends AppCompatActivity {
             displayExecutors[i].execute(() -> {
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
-                        synchronized (updateLock) {
-                            while (!updateReady.get()) {
-                                updateLock.wait();
-                            }
-                        }
-                        String temp = currentTemperature.get();
                         updateBarrier.await();
+                        String temp = currentTemperature.get();
                         runOnUiThread(() -> {
                             ((TextView) linearLayout.findViewWithTag("display" + (displayIndex + 1))).setText("Teller " + (displayIndex + 1) + ": " + temp);
                         });
-                        if (updateBarrier.getNumberWaiting() == 0) {
-                            updateReady.set(false);
-                        }
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
